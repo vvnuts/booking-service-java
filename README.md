@@ -75,7 +75,7 @@ cd booking-service-java
 ### 4. Создайте ветку для задачи
 (каждую последующую ветку с новой задачей нужно создавать от предыдущей ветки задачи: task1 от master, task2 от task1 и т.д.)
 ```bash
-git checkout -b task/<номер-задачи>
+git checkout -b tasks/task1
 ```
 
 ### 5. Выполните задачу и зафиксируйте изменения
@@ -83,7 +83,7 @@ git checkout -b task/<номер-задачи>
 ```bash
 git add .
 git commit -m "Решение задачи <номер>"
-git push origin task/<номер-задачи>
+git push origin tasks/task1
 ```
 
 ### 6. Создайте Pull Request в своём форке
