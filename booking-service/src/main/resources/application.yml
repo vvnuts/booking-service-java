@@ -21,7 +21,7 @@ springdoc:
 
 # Server
 server:
-  port: 8001
+  port: 8081
 
 # RabbitMQ Rebus Integration
 rabbitmq:
