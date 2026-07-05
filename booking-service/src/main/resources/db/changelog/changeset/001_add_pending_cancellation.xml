@@ -14,12 +14,12 @@
 
         <addColumn tableName="bookings">
             <column name="prev_status" type="INTEGER"/>
-            <column name="send_command_time" type="TIMESTAMP"/>
+            <column name="send_command_time" type="TIMESTAMP WITH TIME ZONE"/>
         </addColumn>
 
         <rollback>
-            <dropColumn tableName="prev_status" columnName="INTEGER"/>
-            <dropColumn tableName="send_command_time" columnName="TIMESTAMP"/>
+            <dropColumn tableName="bookings" columnName="prev_status"/>
+            <dropColumn tableName="bookings" columnName="send_command_time"/>
         </rollback>
 
     </changeSet>
