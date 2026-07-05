@@ -44,6 +44,13 @@ public class Booking {
     @Column(name = "catalog_request_id")
     private UUID catalogRequestId;
 
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "prev_status")
+    private BookingStatus prevStatus;
+
+    @Column(name = "send_command_time")
+    private OffsetDateTime sendCommandTime;
+
     /**
      * Factory method для создания нового бронирования с валидацией бизнес-правил
      */
@@ -97,6 +104,45 @@ public class Booking {
     }
 
     /**
+     * Поместить в промежуточный статус "Подготовка к отмене"
+     */
+    public void cancellationPending(OffsetDateTime currentDate) {
+        switch (status) {
+            case AWAIT_CONFIRMATION:
+                this.prevStatus = status;
+                this.status = BookingStatus.CANCELLATION_PENDING;
+                this.sendCommandTime = currentDate;
+                break;
+            case CONFIRMED:
+                if (currentDate.toLocalDate().isBefore(bookedFrom)) {
+                    this.prevStatus = status;
+                    this.status = BookingStatus.CANCELLATION_PENDING;
+                    this.sendCommandTime = currentDate;
+                } else {
+                    throw new BusinessException("Невозможно отменить начавшееся бронирование");
+                }
+                break;
+            case NONE:
+            case CANCELLED:
+            case CANCELLATION_PENDING:
+            default:
+                throw new BusinessException("Некорректный статус для отмены");
+        }
+    }
+
+    public void revertPendingCancellation() {
+        if (prevStatus == null) {
+            throw new BusinessException("prevStatus == null для id = " + id);
+        }
+        if (status != BookingStatus.CANCELLATION_PENDING) {
+            throw new BusinessException("Статус заявки некорректен, заявка должна быть в статусе " + BookingStatus.CANCELLATION_PENDING);
+        }
+        this.status = prevStatus;
+        this.prevStatus = null;
+        this.sendCommandTime = null;
+    }
+
+    /**
      * Отменить бронирование с учетом бизнес-правил
      */
     public void cancel(LocalDate currentDate) {
@@ -110,6 +156,11 @@ public class Booking {
                 } else {
                     throw new BusinessException("Невозможно отменить начавшееся бронирование");
                 }
+                break;
+            case CANCELLATION_PENDING:
+                this.status = BookingStatus.CANCELLED;
+                this.prevStatus = null;
+                this.sendCommandTime = null;
                 break;
             case NONE:
             case CANCELLED:

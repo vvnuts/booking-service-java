@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="
+            http://www.liquibase.org/xml/ns/dbchangelog
+            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="001_add_pending_cancellation"
+               author="vvnuts">
+
+        <comment>Add prev_status and send_command_time to bookings</comment>
+
+        <addColumn tableName="bookings">
+            <column name="prev_status" type="INTEGER"/>
+            <column name="send_command_time" type="TIMESTAMP WITH TIME ZONE"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="bookings" columnName="prev_status"/>
+            <dropColumn tableName="bookings" columnName="send_command_time"/>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -46,4 +46,7 @@
         </createIndex>
     </changeSet>
 
+    <include file="changeset/001_add_pending_cancellation.xml"
+             relativeToChangelogFile="true"/>
+
 </databaseChangeLog>
