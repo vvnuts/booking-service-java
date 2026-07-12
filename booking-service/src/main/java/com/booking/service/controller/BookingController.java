@@ -3,14 +3,19 @@ package com.booking.service.controller;
 import com.booking.service.dto.request.CreateBookingRequest;
 import com.booking.service.dto.request.GetBookingsByFilterRequest;
 import com.booking.service.dto.response.BookingResponse;
+import com.booking.service.dto.response.StatisticsResponse;
 import com.booking.service.entity.Booking;
 import com.booking.service.entity.BookingStatus;
 import com.booking.service.service.BookingService;
 import com.booking.service.service.mapper.BookingMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -19,6 +24,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/booking")
 @RequiredArgsConstructor
+@Validated
 public class BookingController {
 
     private final BookingService bookingService;
@@ -72,5 +78,13 @@ public class BookingController {
     @PostMapping("{id}/cancel")
     public void cancel(@PathVariable Long id) {
         bookingService.cancelBooking(id);
+    }
+
+    @GetMapping("statistics")
+    public ResponseEntity<StatisticsResponse> getStatistics(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate dateFrom,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate dateTo
+    ) {
+        return ResponseEntity.ok(bookingService.getStatisticsByDate(dateFrom, dateTo));
     }
 }

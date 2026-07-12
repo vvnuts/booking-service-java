@@ -2,13 +2,13 @@ package com.booking.service.repository;
 
 import com.booking.service.entity.Booking;
 import com.booking.service.entity.BookingStatus;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +18,18 @@ import java.util.UUID;
  */
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, Long> {
+
+    interface BookingStatusCountProjection {
+        BookingStatus getStatus();
+
+        Long getCount();
+    }
+
+    interface ResourceBookingCountProjection {
+        Long getResourceId();
+
+        Long getCount();
+    }
 
     /**
      * Найти бронирование по идентификатору запроса в Catalog Service
@@ -52,4 +64,38 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
      */
     @Query("SELECT b.status FROM Booking b WHERE b.id = :id")
     BookingStatus findStatusById(@Param("id") Long id);
+
+    @Query("""
+            SELECT COUNT(b)
+            FROM Booking b
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
+            """)
+    long countByCreatedAtBetween(
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive
+    );
+
+    @Query("""
+            SELECT b.status AS status, COUNT(b) AS count
+            FROM Booking b
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
+            GROUP BY b.status
+            """)
+    List<BookingStatusCountProjection> findStatusStatisticsByCreatedAtBetween(
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive
+    );
+
+    @Query("""
+            SELECT b.resourceId AS resourceId, COUNT(b) AS count
+            FROM Booking b
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
+            GROUP BY b.resourceId
+            ORDER BY COUNT(b) DESC, b.resourceId ASC
+            """)
+    List<ResourceBookingCountProjection> findTopResourceStatisticsByCreatedAtBetween(
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive,
+            Pageable pageable
+    );
 }
