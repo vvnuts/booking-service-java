@@ -56,6 +56,17 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
+    public void resendCancelBookingCommand(Booking booking) {
+        booking.markCancelCommandSent(dateTimeProvider.utcNow());
+        bookingRepository.save(booking);
+
+        sendCommandIfNeed(booking);
+
+        log.info("Повторная отмена бронирования с ID: {}", booking.getId());
+    }
+
+    @Override
     public void cancelBooking(Long id) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Бронирование с указанным id: '" + id + "' не найдено."));
@@ -64,16 +75,21 @@ public class BookingServiceImpl implements BookingService {
 
         bookingRepository.save(booking);
 
-        if (booking.getCatalogRequestId() != null) {
-            CancelBookingJobByRequestIdRequest command = new CancelBookingJobByRequestIdRequest(
-                    UUID.randomUUID(),
-                    booking.getCatalogRequestId()
-            );
-
-            bookingEventPublisher.publishCancelBookingJob(command);
-        }
+        sendCommandIfNeed(booking);
 
         log.info("Отменено бронирование с ID: {}", id);
+    }
+
+    private void sendCommandIfNeed(Booking booking) {
+        if (booking.getCatalogRequestId() == null) {
+            return;
+        }
+        CancelBookingJobByRequestIdRequest command = new CancelBookingJobByRequestIdRequest(
+                UUID.randomUUID(),
+                booking.getCatalogRequestId()
+        );
+
+        bookingEventPublisher.publishCancelBookingJob(command);
     }
 
     @Transactional(readOnly = true)
@@ -110,6 +126,11 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("Найдено бронирование: id={}, статус={}. Подтверждаем...",
                 booking.getId(), booking.getStatus());
+
+        if (booking.getStatus() == BookingStatus.CANCELLATION_PENDING) {
+            log.warn("Обнаружена Race condition при обработке BookingJobConfirmed: bookingId={}, requestId={}, prevStatus={}, sendCommandTime={}",
+                    booking.getId(), requestId, booking.getPrevStatus(), booking.getSendCommandTime());
+        }
 
         booking.confirm();
         bookingRepository.save(booking);
