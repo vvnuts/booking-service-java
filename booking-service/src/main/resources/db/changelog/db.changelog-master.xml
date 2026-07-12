@@ -49,4 +49,7 @@
     <include file="changeset/001_add_pending_cancellation.xml"
              relativeToChangelogFile="true"/>
 
+    <include file="changeset/002_create_audit_status_log.xml"
+             relativeToChangelogFile="true"/>
+
 </databaseChangeLog>

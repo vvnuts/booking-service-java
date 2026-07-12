@@ -5,6 +5,8 @@ import com.booking.service.dto.response.StatisticsResponse;
 import com.booking.service.entity.Booking;
 import com.booking.service.entity.BookingStatus;
 import com.booking.service.exception.BusinessException;
+import com.booking.service.listeners.events.BookingStatusChangeReason;
+import com.booking.service.listeners.events.BookingStatusChangedEvent;
 import com.booking.service.messaging.contracts.CancelBookingJobByRequestIdRequest;
 import com.booking.service.messaging.listener.BookingEventPublisher;
 import com.booking.service.repository.BookingRepository;
@@ -14,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
@@ -41,6 +44,9 @@ class BookingServiceImplTest {
 
     @Mock
     private CurrentDateTimeProvider dateTimeProvider;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private BookingServiceImpl bookingService;
@@ -83,7 +89,7 @@ class BookingServiceImplTest {
         verify(bookingRepository).countByCreatedAtBetween(rangeStart, rangeEndExclusive);
         verify(bookingRepository).findStatusStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive);
         verify(bookingRepository).findTopResourceStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive, topFive);
-        verifyNoInteractions(bookingEventPublisher, dateTimeProvider);
+        verifyNoInteractions(bookingEventPublisher, dateTimeProvider, applicationEventPublisher);
     }
 
     @Test
@@ -94,7 +100,7 @@ class BookingServiceImplTest {
         assertThatThrownBy(() -> bookingService.getStatisticsByDate(dateFrom, dateTo))
                 .isInstanceOf(BusinessException.class);
 
-        verifyNoInteractions(bookingRepository, bookingEventPublisher, dateTimeProvider);
+        verifyNoInteractions(bookingRepository, bookingEventPublisher, dateTimeProvider, applicationEventPublisher);
     }
 
     @Test
@@ -123,6 +129,16 @@ class BookingServiceImplTest {
 
         verify(bookingRepository).findByCatalogRequestId(requestId);
         verify(bookingRepository).save(booking);
+
+        ArgumentCaptor<BookingStatusChangedEvent> eventCaptor =
+                ArgumentCaptor.forClass(BookingStatusChangedEvent.class);
+        verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().booking()).isSameAs(booking);
+        assertThat(eventCaptor.getValue().oldStatus()).isEqualTo(BookingStatus.CANCELLATION_PENDING);
+        assertThat(eventCaptor.getValue().newStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(eventCaptor.getValue().reason()).isEqualTo(BookingStatusChangeReason.BOOKING_CONFIRMED_BY_CATALOG);
+        assertThat(eventCaptor.getValue().initiator()).isEqualTo("System");
+
         verifyNoInteractions(bookingEventPublisher, dateTimeProvider);
     }
 

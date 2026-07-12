@@ -2,9 +2,12 @@ package com.booking.service.service.impl;
 
 import com.booking.service.config.CurrentDateTimeProvider;
 import com.booking.service.dto.response.StatisticsResponse;
+import com.booking.service.entity.AuditStatusLog;
 import com.booking.service.entity.Booking;
 import com.booking.service.entity.BookingStatus;
 import com.booking.service.exception.BusinessException;
+import com.booking.service.listeners.events.BookingStatusChangeReason;
+import com.booking.service.listeners.events.BookingStatusChangedEvent;
 import com.booking.service.messaging.contracts.CancelBookingJobByRequestIdRequest;
 import com.booking.service.messaging.contracts.CreateBookingJobRequest;
 import com.booking.service.messaging.listener.BookingEventPublisher;
@@ -12,6 +15,7 @@ import com.booking.service.repository.BookingRepository;
 import com.booking.service.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,6 +35,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final BookingEventPublisher bookingEventPublisher;
     private final CurrentDateTimeProvider dateTimeProvider;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public Long createBooking(Long userId, Long resourceId, LocalDate bookedFrom, LocalDate bookedTo) {
@@ -40,6 +45,12 @@ public class BookingServiceImpl implements BookingService {
         booking.setCatalogRequestId(requestId);
 
         booking = bookingRepository.save(booking);
+        publishStatusChanged(
+                booking,
+                BookingStatus.NONE,
+                BookingStatusChangeReason.BOOKING_CREATED,
+                userInitiator(booking)
+        );
 
         CreateBookingJobRequest command = new CreateBookingJobRequest(
                 UUID.randomUUID(),
@@ -71,9 +82,11 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Бронирование с указанным id: '" + id + "' не найдено."));
 
+        BookingStatus oldStatus = booking.getStatus();
         booking.cancellationPending(dateTimeProvider.utcNow());
 
         bookingRepository.save(booking);
+        publishStatusChanged(booking, oldStatus, BookingStatusChangeReason.CANCELLATION_REQUESTED, userInitiator(booking));
 
         sendCommandIfNeed(booking);
 
@@ -132,8 +145,10 @@ public class BookingServiceImpl implements BookingService {
                     booking.getId(), requestId, booking.getPrevStatus(), booking.getSendCommandTime());
         }
 
+        BookingStatus oldStatus = booking.getStatus();
         booking.confirm();
         bookingRepository.save(booking);
+        publishStatusChanged(booking, oldStatus, BookingStatusChangeReason.BOOKING_CONFIRMED_BY_CATALOG, AuditStatusLog.SYSTEM_INITIATOR);
 
         log.info("Бронирование успешно подтверждено: id={}, новый статус={}",
                 booking.getId(), booking.getStatus());
@@ -154,8 +169,10 @@ public class BookingServiceImpl implements BookingService {
                 booking.getId(), booking.getStatus());
 
         LocalDate currentDate = LocalDate.from(dateTimeProvider.utcNow());
+        BookingStatus oldStatus = booking.getStatus();
         booking.cancel(currentDate);
         bookingRepository.save(booking);
+        publishStatusChanged(booking, oldStatus, BookingStatusChangeReason.BOOKING_DENIED_BY_CATALOG, AuditStatusLog.SYSTEM_INITIATOR);
 
         log.info("Бронирование успешно отменено: id={}, новый статус={}",
                 booking.getId(), booking.getStatus());
@@ -176,8 +193,10 @@ public class BookingServiceImpl implements BookingService {
                         "Выполняем откат к предыдущему",
                 booking.getId(), booking.getStatus(), booking.getPrevStatus(), booking.getSendCommandTime());
 
+        BookingStatus oldStatus = booking.getStatus();
         booking.revertPendingCancellation();
         bookingRepository.save(booking);
+        publishStatusChanged(booking, oldStatus, BookingStatusChangeReason.CANCELLATION_ERROR_HANDLED, AuditStatusLog.SYSTEM_INITIATOR);
 
         log.info("Статус бронирования был успешно откачен: id={}, новый статус={}",
                 booking.getId(), booking.getStatus());
@@ -211,5 +230,26 @@ public class BookingServiceImpl implements BookingService {
                 statusBreakdown,
                 topResources
         );
+    }
+
+    private void publishStatusChanged(Booking booking,
+                                      BookingStatus oldStatus,
+                                      BookingStatusChangeReason reason,
+                                      String initiator) {
+        BookingStatus newStatus = booking.getStatus();
+        if (oldStatus == newStatus) {
+            return;
+        }
+        applicationEventPublisher.publishEvent(new BookingStatusChangedEvent(
+                booking,
+                oldStatus,
+                newStatus,
+                reason,
+                initiator
+        ));
+    }
+
+    private String userInitiator(Booking booking) {
+        return String.valueOf(booking.getUserId());
     }
 }
