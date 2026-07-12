@@ -8,7 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -68,34 +68,34 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     @Query("""
             SELECT COUNT(b)
             FROM Booking b
-            WHERE FUNCTION('DATE', b.createdAt) BETWEEN :dateFrom AND :dateTo
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
             """)
     long countByCreatedAtBetween(
-            @Param("dateFrom") LocalDate dateFrom,
-            @Param("dateTo") LocalDate dateTo
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive
     );
 
     @Query("""
             SELECT b.status AS status, COUNT(b) AS count
             FROM Booking b
-            WHERE FUNCTION('DATE', b.createdAt) BETWEEN :dateFrom AND :dateTo
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
             GROUP BY b.status
             """)
     List<BookingStatusCountProjection> findStatusStatisticsByCreatedAtBetween(
-            @Param("dateFrom") LocalDate dateFrom,
-            @Param("dateTo") LocalDate dateTo
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive
     );
 
     @Query("""
             SELECT b.resourceId AS resourceId, COUNT(b) AS count
             FROM Booking b
-            WHERE FUNCTION('DATE', b.createdAt) BETWEEN :dateFrom AND :dateTo
+            WHERE b.createdAt >= :dateFrom AND b.createdAt < :dateToExclusive
             GROUP BY b.resourceId
             ORDER BY COUNT(b) DESC, b.resourceId ASC
             """)
     List<ResourceBookingCountProjection> findTopResourceStatisticsByCreatedAtBetween(
-            @Param("dateFrom") LocalDate dateFrom,
-            @Param("dateTo") LocalDate dateTo,
+            @Param("dateFrom") OffsetDateTime dateFrom,
+            @Param("dateToExclusive") OffsetDateTime dateToExclusive,
             Pageable pageable
     );
 }

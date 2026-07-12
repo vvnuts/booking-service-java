@@ -18,10 +18,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.*;
 
 @Service
 @Transactional
@@ -170,18 +169,18 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException("Дата начала не может быть позже даты конца.");
         }
 
-        long totalBookings = bookingRepository.countByCreatedAtBetween(dateFrom, dateTo);
+        OffsetDateTime rangeStart = dateFrom.atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime rangeEndExclusive = dateTo.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
 
-        Map<BookingStatus, Long> statusBreakdown = bookingRepository
-                .findStatusStatisticsByCreatedAtBetween(dateFrom, dateTo)
-                .stream()
-                .collect(Collectors.toMap(
-                        BookingRepository.BookingStatusCountProjection::getStatus,
-                        BookingRepository.BookingStatusCountProjection::getCount
-                ));
+        long totalBookings = bookingRepository.countByCreatedAtBetween(rangeStart, rangeEndExclusive);
+
+        Map<BookingStatus, Long> statusBreakdown = new EnumMap<>(BookingStatus.class);
+        Arrays.stream(BookingStatus.values()).forEach(status -> statusBreakdown.put(status, 0L));
+        bookingRepository.findStatusStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive)
+                .forEach(row -> statusBreakdown.put(row.getStatus(), row.getCount()));
 
         List<Long> topResources = bookingRepository
-                .findTopResourceStatisticsByCreatedAtBetween(dateFrom, dateTo, PageRequest.of(0, 5))
+                .findTopResourceStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive, PageRequest.of(0, 5))
                 .stream()
                 .map(BookingRepository.ResourceBookingCountProjection::getResourceId)
                 .toList();

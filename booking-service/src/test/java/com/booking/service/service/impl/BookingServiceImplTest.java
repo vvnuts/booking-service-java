@@ -14,6 +14,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -42,17 +44,19 @@ class BookingServiceImplTest {
     void getStatisticsByDate_shouldReturnAggregatedStatistics() {
         LocalDate dateFrom = LocalDate.of(2026, 7, 1);
         LocalDate dateTo = LocalDate.of(2026, 7, 31);
+        OffsetDateTime rangeStart = OffsetDateTime.of(2026, 7, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime rangeEndExclusive = OffsetDateTime.of(2026, 8, 1, 0, 0, 0, 0, ZoneOffset.UTC);
         PageRequest topFive = PageRequest.of(0, 5);
 
-        when(bookingRepository.countByCreatedAtBetween(dateFrom, dateTo))
+        when(bookingRepository.countByCreatedAtBetween(rangeStart, rangeEndExclusive))
                 .thenReturn(4L);
-        when(bookingRepository.findStatusStatisticsByCreatedAtBetween(dateFrom, dateTo))
+        when(bookingRepository.findStatusStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive))
                 .thenReturn(List.of(
                         statusCount(BookingStatus.AWAIT_CONFIRMATION, 2L),
                         statusCount(BookingStatus.CONFIRMED, 1L),
                         statusCount(BookingStatus.CANCELLED, 1L)
                 ));
-        when(bookingRepository.findTopResourceStatisticsByCreatedAtBetween(dateFrom, dateTo, topFive))
+        when(bookingRepository.findTopResourceStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive, topFive))
                 .thenReturn(List.of(
                         resourceCount(10L, 2L),
                         resourceCount(20L, 1L),
@@ -63,15 +67,17 @@ class BookingServiceImplTest {
 
         assertThat(result.getTotalBookings()).isEqualTo(4);
         assertThat(result.getStatusBreakdown()).containsExactlyInAnyOrderEntriesOf(Map.of(
+                BookingStatus.NONE, 0L,
                 BookingStatus.AWAIT_CONFIRMATION, 2L,
                 BookingStatus.CONFIRMED, 1L,
-                BookingStatus.CANCELLED, 1L
+                BookingStatus.CANCELLED, 1L,
+                BookingStatus.CANCELLATION_PENDING, 0L
         ));
         assertThat(result.getTopResources()).containsExactly(10L, 20L, 30L);
 
-        verify(bookingRepository).countByCreatedAtBetween(dateFrom, dateTo);
-        verify(bookingRepository).findStatusStatisticsByCreatedAtBetween(dateFrom, dateTo);
-        verify(bookingRepository).findTopResourceStatisticsByCreatedAtBetween(dateFrom, dateTo, topFive);
+        verify(bookingRepository).countByCreatedAtBetween(rangeStart, rangeEndExclusive);
+        verify(bookingRepository).findStatusStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive);
+        verify(bookingRepository).findTopResourceStatisticsByCreatedAtBetween(rangeStart, rangeEndExclusive, topFive);
         verifyNoInteractions(bookingEventPublisher, dateTimeProvider);
     }
 
