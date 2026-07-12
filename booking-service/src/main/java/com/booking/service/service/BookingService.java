@@ -22,6 +22,16 @@ public interface BookingService {
     Long createBooking(Long userId, Long resourceId, LocalDate bookedFrom, LocalDate bookedTo);
 
     /**
+     * Повторно отправить команду отмены booking job в Catalog Service.
+     * Метод используется для бронирований, которые зависли в статусе
+     * {@link BookingStatus#CANCELLATION_PENDING}: обновляет время отправки команды,
+     * сохраняет бронирование и публикует команду отмены, если у бронирования есть requestId Catalog Service.
+     *
+     * @param booking бронирование в статусе ожидания отмены
+     */
+    void resendCancelBookingCommand(Booking booking);
+
+    /**
      * Отменить бронирование.
      * Отправляет асинхронную команду в Catalog Service для отмены booking job.
      *

@@ -42,3 +42,9 @@ rabbitmq:
       # События (входящие от Catalog Service)
       booking-job-confirmed: BookingService.Catalog.Async.Api.Contracts.Events.BookingJobConfirmed, BookingService.Catalog.Async.Api.Contracts
       booking-job-denied: BookingService.Catalog.Async.Api.Contracts.Events.BookingJobDenied, BookingService.Catalog.Async.Api.Contracts
+
+# Scheduler settings
+booking:
+  scheduler:
+    find-cancellation-pending-delay-ms: 60000
+    check-cancellation-pending-s: 600

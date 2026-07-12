@@ -2,12 +2,15 @@ package com.booking.service.service.impl;
 
 import com.booking.service.config.CurrentDateTimeProvider;
 import com.booking.service.dto.response.StatisticsResponse;
+import com.booking.service.entity.Booking;
 import com.booking.service.entity.BookingStatus;
 import com.booking.service.exception.BusinessException;
+import com.booking.service.messaging.contracts.CancelBookingJobByRequestIdRequest;
 import com.booking.service.messaging.listener.BookingEventPublisher;
 import com.booking.service.repository.BookingRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -18,6 +21,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -92,6 +97,58 @@ class BookingServiceImplTest {
         verifyNoInteractions(bookingRepository, bookingEventPublisher, dateTimeProvider);
     }
 
+    @Test
+    void handleBookingJobConfirmed_shouldConfirmCancellationPendingAndClearCancellationFields() {
+        UUID requestId = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.of(2026, 7, 1, 10, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime cancellationStartedAt = OffsetDateTime.of(2026, 7, 2, 10, 0, 0, 0, ZoneOffset.UTC);
+
+        Booking booking = Booking.create(
+                1L,
+                10L,
+                LocalDate.of(2026, 7, 10),
+                LocalDate.of(2026, 7, 12),
+                createdAt
+        );
+        booking.setCatalogRequestId(requestId);
+        booking.cancellationPending(cancellationStartedAt);
+
+        when(bookingRepository.findByCatalogRequestId(requestId)).thenReturn(Optional.of(booking));
+
+        bookingService.handleBookingJobConfirmed(requestId);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(booking.getPrevStatus()).isNull();
+        assertThat(booking.getSendCommandTime()).isNull();
+
+        verify(bookingRepository).findByCatalogRequestId(requestId);
+        verify(bookingRepository).save(booking);
+        verifyNoInteractions(bookingEventPublisher, dateTimeProvider);
+    }
+
+    @Test
+    void resendCancelBookingCommand_shouldUpdateSendCommandTimeSaveAndPublishCommand() {
+        UUID requestId = UUID.randomUUID();
+        OffsetDateTime createdAt = OffsetDateTime.of(2026, 7, 1, 10, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime cancellationStartedAt = OffsetDateTime.of(2026, 7, 2, 10, 0, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime resentAt = OffsetDateTime.of(2026, 7, 2, 10, 15, 0, 0, ZoneOffset.UTC);
+        Booking booking = pendingBooking(requestId, createdAt, cancellationStartedAt);
+
+        when(dateTimeProvider.utcNow()).thenReturn(resentAt);
+
+        bookingService.resendCancelBookingCommand(booking);
+
+        ArgumentCaptor<CancelBookingJobByRequestIdRequest> commandCaptor =
+                ArgumentCaptor.forClass(CancelBookingJobByRequestIdRequest.class);
+        assertThat(booking.getSendCommandTime()).isEqualTo(resentAt);
+
+        verify(dateTimeProvider).utcNow();
+        verify(bookingRepository).save(booking);
+        verify(bookingEventPublisher).publishCancelBookingJob(commandCaptor.capture());
+        assertThat(commandCaptor.getValue().getEventId()).isNotNull();
+        assertThat(commandCaptor.getValue().getRequestId()).isEqualTo(requestId);
+    }
+
     private BookingRepository.BookingStatusCountProjection statusCount(BookingStatus status, Long count) {
         return new BookingRepository.BookingStatusCountProjection() {
             @Override
@@ -118,5 +175,20 @@ class BookingServiceImplTest {
                 return count;
             }
         };
+    }
+
+    private Booking pendingBooking(UUID requestId, OffsetDateTime createdAt, OffsetDateTime cancellationStartedAt) {
+        Booking booking = Booking.create(
+                1L,
+                10L,
+                LocalDate.of(2026, 7, 10),
+                LocalDate.of(2026, 7, 12),
+                createdAt
+        );
+        if (requestId != null) {
+            booking.setCatalogRequestId(requestId);
+        }
+        booking.cancellationPending(cancellationStartedAt);
+        return booking;
     }
 }

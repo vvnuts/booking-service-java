@@ -58,6 +58,24 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
                                Pageable pageable);
 
     /**
+     * Найти бронирования, которые зависли в ожидании подтверждения отмены.
+     *
+     * @param status статус ожидания отмены
+     * @param sentBefore максимальное время последней отправки команды
+     * @return список бронирований, требующих повторной отправки команды отмены
+     */
+    @Query("""
+            SELECT b
+            FROM Booking b
+            WHERE b.status = :status
+              AND (b.sendCommandTime IS NULL OR b.sendCommandTime < :sentBefore)
+            """)
+    List<Booking> findByStatusAndSendCommandTimeBefore(
+            @Param("status") BookingStatus status,
+            @Param("sentBefore") OffsetDateTime sentBefore
+    );
+
+    /**
      * Получить только статус бронирования по ID
      * @param id идентификатор бронирования
      * @return статус бронирования или null

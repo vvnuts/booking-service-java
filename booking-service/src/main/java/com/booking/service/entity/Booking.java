@@ -94,13 +94,31 @@ public class Booking {
     }
 
     /**
-     * Подтвердить бронирование (переход из AwaitConfirmation в Confirmed)
+     * Зафиксировать время отправки команды отмены в Catalog Service.
+     *
+     * @param sendCommandTime момент отправки команды
+     */
+    public void markCancelCommandSent(OffsetDateTime sendCommandTime) {
+        if (status != BookingStatus.CANCELLATION_PENDING) {
+            throw new BusinessException("Нельзя обновить время отправки команды отмены для статуса " + status);
+        }
+        if (sendCommandTime == null) {
+            throw new BusinessException("Время отправки команды отмены не инициализировано");
+        }
+        this.sendCommandTime = sendCommandTime;
+    }
+
+    /**
+     * Подтвердить бронирование (переход из AwaitConfirmation или CancellationPending в Confirmed)
      */
     public void confirm() {
-        if (status != BookingStatus.AWAIT_CONFIRMATION) {
-            throw new BusinessException("Статус заявки некорректен, заявка должна быть в статусе " + BookingStatus.AWAIT_CONFIRMATION);
+        if (status != BookingStatus.AWAIT_CONFIRMATION && status != BookingStatus.CANCELLATION_PENDING) {
+            throw new BusinessException("Статус заявки некорректен, заявка должна быть в статусе "
+                    + BookingStatus.AWAIT_CONFIRMATION + " или " + BookingStatus.CANCELLATION_PENDING);
         }
         this.status = BookingStatus.CONFIRMED;
+        this.prevStatus = null;
+        this.sendCommandTime = null;
     }
 
     /**
